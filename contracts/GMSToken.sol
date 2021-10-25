@@ -16,6 +16,7 @@ contract GMSToken is Ownable, ERC20 {
         uint256 volume;
         uint256 unlocked;
         uint256 timeUnlockFirst;    // since _timeMarket
+        uint256 ratioUnlockFirst;
         uint256 ratio;
         uint256 interval;
     }
@@ -55,8 +56,9 @@ contract GMSToken is Ownable, ERC20 {
         uint256 timePoint = _timeMarket.add(locker.timeUnlockFirst);
         if (_timeMarket != 0 && block.timestamp > timePoint) {
             if (locker.volume > locker.unlocked) {
+                uint256 unlockedRate = locker.ratioUnlockFirst;
                 uint256 pastTime = block.timestamp - timePoint; // just subtraction
-                uint256 unlockedRate = locker.interval == 0 ? 1e18 : (pastTime / locker.interval).mul(locker.ratio);
+                unlockedRate = unlockedRate.add(locker.interval == 0 ? 1e18 : (pastTime / locker.interval).mul(locker.ratio));
                 unlockedRate = unlockedRate > 1e18 ? 1e18 : unlockedRate;
 
                 unlockableAmount = locker.volume.mul(unlockedRate).div(1e18) - locker.unlocked; // just subtraction
@@ -88,7 +90,7 @@ contract GMSToken is Ownable, ERC20 {
         }
     }
 
-    function distribution(address[] memory tos, uint256[] memory amounts, uint256 timeUnlockFirst, uint256 ratio, uint256 interval) public onlyOwner {
+    function distribution(address[] memory tos, uint256[] memory amounts, uint256 timeUnlockFirst, uint256 ratioUnlockFirst, uint256 ratio, uint256 interval) public onlyOwner {
         uint256 length = tos.length;
         require(length == amounts.length, "length mismatch");
 
@@ -102,6 +104,7 @@ contract GMSToken is Ownable, ERC20 {
                 volume: amount,
                 unlocked: 0,
                 timeUnlockFirst: timeUnlockFirst,
+                ratioUnlockFirst: ratioUnlockFirst,
                 ratio: ratio,
                 interval: interval
             });

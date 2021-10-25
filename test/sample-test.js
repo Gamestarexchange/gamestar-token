@@ -17,7 +17,7 @@ contract('GMSToken', (accounts) => {
             gms = await GMSToken.new();
             await gms.setTimeMarket(await time.latest());
 
-            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 30*24*60*60, toWei("0.125"), 30*24*60*60);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 60*24*60*60, toWei("0.125"), toWei("0.125"), 30*24*60*60);
         });
         it('should transfer immediately', async () => {
             await expectRevert(
@@ -84,7 +84,7 @@ contract('GMSToken', (accounts) => {
             gms = await GMSToken.new();
             await gms.setTimeMarket(await time.latest());
 
-            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 14*24*60*60, toWei("0.15"), 30*24*60*60);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 44*24*60*60, toWei("0.15"), toWei("0.15"), 30*24*60*60);
         });
         it('should transfer immediately', async () => {
             await expectRevert(
@@ -151,7 +151,7 @@ contract('GMSToken', (accounts) => {
             gms = await GMSToken.new();
             await gms.setTimeMarket(await time.latest());
 
-            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 7*24*60*60, toWei("0.167"), 30*24*60*60);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 37*24*60*60, toWei("0.167"), toWei("0.167"), 30*24*60*60);
         });
         it('should transfer immediately', async () => {
             await expectRevert(
@@ -217,7 +217,7 @@ contract('GMSToken', (accounts) => {
         before('!! deploy / distribution', async () => {
             gms = await GMSToken.new();
 
-            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 0, toWei("1"), 0);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 0, toWei("0.25"), toWei("0.25"), 30*24*60*60);
         });
 
         it('should transfer immediately', async () => {
@@ -230,7 +230,7 @@ contract('GMSToken', (accounts) => {
         it('should transfer after setTimeMarket', async () => {
             await gms.setTimeMarket(await time.latest());
             await time.increase(time.duration.seconds(1));
-            let tx = await gms.transfer(accounts[2], toWei(`${amount}`), {from: accounts[1]});
+            let tx = await gms.transfer(accounts[2], toWei(`${amount*0.25}`), {from: accounts[1]});
             await expectEvent.inTransaction(
                 tx.tx,
                 gms,
@@ -238,10 +238,10 @@ contract('GMSToken', (accounts) => {
                 {
                     from: accounts[1],
                     to: accounts[2],
-                    value: toWei(`${amount}`)
+                    value: toWei(`${amount*0.25}`)
                 }
             );
-            expect(toWei(`${amount}`)).to.equal(BigInt(await gms.balanceOf(accounts[2])).toString());
+            expect(toWei(`${amount*0.25}`)).to.equal(BigInt(await gms.balanceOf(accounts[2])).toString());
             await expectRevert(
                 gms.transfer(accounts[2], toWei("1"), {from: accounts[1]}),
                 'ERC20: transfer amount exceeds balance'
@@ -259,8 +259,8 @@ contract('GMSToken', (accounts) => {
             gms = await GMSToken.new();
             await gms.setTimeMarket(await time.latest());
 
-            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 0, toWei("0.125"), 30*24*60*60);
-            await gms.distribution([accounts[2]], [toWei(`${amount}`)], 9*30*24*60*60, toWei("0.125"), 30*24*60*60);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 30*24*60*60, toWei("0.125"), toWei("0.125"), 30*24*60*60);
+            await gms.distribution([accounts[2]], [toWei(`${amount}`)], 10*30*24*60*60, toWei("0.125"), toWei("0.125"), 30*24*60*60);
         });
 
         it('should transfer immediately', async () => {
@@ -356,7 +356,7 @@ contract('GMSToken', (accounts) => {
             gms = await GMSToken.new();
             await gms.setTimeMarket(await time.latest());
 
-            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 0, toWei("1"), 24*30*24*60*60);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 0, "0", toWei("1"), 24*30*24*60*60);
         });
 
         it('should transfer immediately', async () => {
