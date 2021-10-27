@@ -13,8 +13,14 @@ contract GMSToken is Ownable, ERC20 {
 
     // struct
     struct Locker {
+        uint256 totalVolume;
+        uint256 totalUnlocked;
+
+        LockItem[] lockItems;
+    }
+
+    struct LockItem {
         uint256 volume;
-        uint256 unlocked;
         uint256 timeUnlockFirst;    // since _timeMarket
         uint256 ratioUnlockFirst;
         uint256 ratio;
@@ -35,7 +41,8 @@ contract GMSToken is Ownable, ERC20 {
 
     function balanceOfFreeze(address account) public view returns (uint256) {
         Locker memory locker = _lockers[account];
-        return locker.volume.sub(locker.unlocked).sub(balanceOfUnlockable(account));
+
+        return locker.totalVolume.sub(unlockedInTheoretical(account));
     }
 
     function balanceOfFree(address account) public view returns (uint256) {
@@ -43,29 +50,37 @@ contract GMSToken is Ownable, ERC20 {
         return balanceOf(account).sub(freeze);
     }
 
-    function getLocker(address account) public view returns (uint256 volume, uint256 unlocked, uint256 timeUnlockFirst, uint256 ratio, uint256 interval) {
+    function getLockerOverview(address account) public view returns (uint256 totalVolume, uint256 totalUnlocked) {
         Locker memory locker = _lockers[account];
 
-        return (locker.volume, locker.unlocked, locker.timeUnlockFirst, locker.ratio, locker.interval);
+        return (locker.totalVolume, locker.totalUnlocked);
     }
 
-    function balanceOfUnlockable(address account) private view returns (uint256) {
-        uint256 unlockableAmount = 0;
+    function getLockerDetail(address account, uint256 index) public view returns (uint256 volume, uint256 timeUnlockFirst, uint256 ratio, uint256 interval) {
+        LockItem memory lockItem = _lockers[account].lockItems[index];
 
-        Locker memory locker = _lockers[account];
-        uint256 timePoint = _timeMarket.add(locker.timeUnlockFirst);
-        if (_timeMarket != 0 && block.timestamp > timePoint) {
-            if (locker.volume > locker.unlocked) {
-                uint256 unlockedRate = locker.ratioUnlockFirst;
-                uint256 pastTime = block.timestamp - timePoint; // just subtraction
-                unlockedRate = unlockedRate.add(locker.interval == 0 ? 1e18 : (pastTime / locker.interval).mul(locker.ratio));
-                unlockedRate = unlockedRate > 1e18 ? 1e18 : unlockedRate;
+        return (lockItem.volume, lockItem.timeUnlockFirst, lockItem.ratio, lockItem.interval);
+    }
 
-                unlockableAmount = locker.volume.mul(unlockedRate).div(1e18) - locker.unlocked; // just subtraction
+    function unlockedInTheoretical(address account) private view returns (uint256) {
+        uint256 theoreticalValue = 0;
+
+        LockItem[] memory lockItems = _lockers[account].lockItems;
+        for (uint256 index = 0; index < lockItems.length; index ++) {
+            uint256 timePoint = _timeMarket.add(lockItems[index].timeUnlockFirst);
+            if (_timeMarket != 0 && block.timestamp > timePoint) {
+                if (lockItems[index].volume > 0) {
+                    uint256 unlockedRate = lockItems[index].ratioUnlockFirst;
+                    uint256 pastTime = block.timestamp - timePoint; // just subtraction
+                    unlockedRate = unlockedRate.add(lockItems[index].interval == 0 ? 1e18 : (pastTime / lockItems[index].interval).mul(lockItems[index].ratio));
+                    unlockedRate = unlockedRate > 1e18 ? 1e18 : unlockedRate;
+
+                    theoreticalValue = theoreticalValue.add(lockItems[index].volume.mul(unlockedRate).div(1e18));
+                }
             }
         }
 
-        return unlockableAmount;
+        return theoreticalValue;
     }
 
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
@@ -73,16 +88,14 @@ contract GMSToken is Ownable, ERC20 {
 
         if (from != address(this) && from != address(0)) {
             Locker memory locker = _lockers[from];
-            uint256 lockedAmount = locker.volume.sub(locker.unlocked);
-            uint256 timePoint = _timeMarket.add(locker.timeUnlockFirst);
-            if (_timeMarket != 0 && block.timestamp > timePoint) {
-                uint256 unlockableAmount = balanceOfUnlockable(from);
-                if (unlockableAmount > 0) {
-                    uint256 unlocked = locker.unlocked.add(unlockableAmount);
-                    require(unlocked <= locker.volume, "balance overflow");
+            uint256 lockedAmount = locker.totalVolume.sub(locker.totalUnlocked);
+            if (_timeMarket != 0 && lockedAmount != 0) {
+                uint256 theoreticalValue = unlockedInTheoretical(from);
+                if (theoreticalValue > locker.totalUnlocked) {
+                    require(theoreticalValue <= locker.totalVolume, "theoreticalValue overflow");
 
-                    _lockers[from].unlocked = unlocked;
-                    lockedAmount = locker.volume.sub(unlocked);
+                    _lockers[from].totalUnlocked = theoreticalValue;
+                    lockedAmount = locker.totalVolume.sub(theoreticalValue);
                 }
             }
             uint256 availableBalance = balanceOf(from).sub(lockedAmount);
@@ -98,16 +111,17 @@ contract GMSToken is Ownable, ERC20 {
             address to = tos[index];
             uint256 amount = amounts[index];
 
-            require(_lockers[to].volume == 0, "already distribution");
+//          require(_lockers[to].volume == 0, "already distribution");
 
-            _lockers[to] = Locker({
+            _lockers[to].lockItems.push(LockItem({
                 volume: amount,
-                unlocked: 0,
                 timeUnlockFirst: timeUnlockFirst,
                 ratioUnlockFirst: ratioUnlockFirst,
                 ratio: ratio,
                 interval: interval
-            });
+            }));
+            _lockers[to].totalVolume = _lockers[to].totalVolume.add(amount);
+
             _transfer(address(this), to, amount);
         }
     }

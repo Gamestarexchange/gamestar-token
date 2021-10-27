@@ -344,6 +344,7 @@ contract('GMSToken', (accounts) => {
                 }
             );
             expect(toWei(`${amount}`)).to.equal(BigInt(await gms.balanceOf(accounts[2])).toString());
+            expect('0').to.equal(BigInt(await gms.balanceOfFreeze(accounts[1])).toString());
             await expectRevert(
                 gms.transfer(accounts[2], toWei("1"), {from: accounts[1]}),
                 'ERC20: transfer amount exceeds balance'
@@ -392,6 +393,98 @@ contract('GMSToken', (accounts) => {
                 gms.transfer(accounts[2], toWei("1"), {from: accounts[1]}),
                 'ERC20: transfer amount exceeds balance'
             );
+        });
+    });
+
+    context('>> Private A & Private B', () => {
+        before('!! deploy / distribution', async () => {
+            gms = await GMSToken.new();
+            await gms.setTimeMarket(await time.latest());
+
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 44*24*60*60, toWei("0.15"), toWei("0.15"), 30*24*60*60);
+            await gms.distribution([accounts[1]], [toWei(`${amount}`)], 37*24*60*60, toWei("0.167"), toWei("0.167"), 30*24*60*60);
+        });
+        it('should transfer immediately', async () => {
+            await expectRevert(
+                gms.transfer(accounts[2], toWei("1"), {from: accounts[1]}),
+                'ERC20: transfer amount exceeds balance'
+            );
+        });
+
+        it('should transfer 14 days later', async () => {
+            await time.increase(time.duration.days(14));
+            await expectRevert(
+                gms.transfer(accounts[2], toWei("1"), {from: accounts[1]}),
+                'ERC20: transfer amount exceeds balance'
+            );
+        });
+
+        it('should transfer 37 days later', async () => {
+            await time.increase(time.duration.days(23));
+            let amt = amount * 0.167;
+            await expectRevert(
+                gms.transfer(accounts[2], toWei(`${amt + 1}`), {from: accounts[1]}),
+                'ERC20: transfer amount exceeds balance'
+            );
+
+            let tx = await gms.transfer(accounts[2], toWei(`${amt}`), {from: accounts[1]});
+            await expectEvent.inTransaction(
+                tx.tx,
+                gms,
+                'Transfer',
+                {
+                    from: accounts[1],
+                    to: accounts[2],
+                    value: toWei(`${amt}`)
+                }
+            );
+            expect(toWei(`${amt}`)).to.equal(BigInt(await gms.balanceOf(accounts[2])).toString());
+        });
+
+        it('should transfer 44 days later', async () => {
+            await time.increase(time.duration.days(7));
+            let amt = amount * 0.15;
+            await expectRevert(
+                gms.transfer(accounts[2], toWei(`${amt + 1}`), {from: accounts[1]}),
+                'ERC20: transfer amount exceeds balance'
+            );
+
+            let tx = await gms.transfer(accounts[2], toWei(`${amt}`), {from: accounts[1]});
+            await expectEvent.inTransaction(
+                tx.tx,
+                gms,
+                'Transfer',
+                {
+                    from: accounts[1],
+                    to: accounts[2],
+                    value: toWei(`${amt}`)
+                }
+            );
+            expect(toWei(`${amt + amount * 0.167}`)).to.equal(BigInt(await gms.balanceOf(accounts[2])).toString());
+        });
+
+        it('should transfer 224 days later', async () => {
+            await time.increase(time.duration.days(180));
+            let amtA = amount - amount * 0.15;
+            let amtB = amount - amount * 0.167;
+
+            await expectRevert(
+                gms.transfer(accounts[2], toWei(`${amtA + amtB + 1}`), {from: accounts[1]}),
+                'ERC20: transfer amount exceeds balance'
+            );
+
+            let tx = await gms.transfer(accounts[2], toWei(`${amtA + amtB}`), {from: accounts[1]});
+            await expectEvent.inTransaction(
+                tx.tx,
+                gms,
+                'Transfer',
+                {
+                    from: accounts[1],
+                    to: accounts[2],
+                    value: toWei(`${amtA + amtB}`)
+                }
+            );
+            expect(toWei(`${2 * amount}`)).to.equal(BigInt(await gms.balanceOf(accounts[2])).toString());
         });
     });
 
